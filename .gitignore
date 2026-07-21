@@ -1,0 +1,10 @@
+.env
+/states/
+*.log
+/tools/spectrum_update
+/tools/universe_issue
+/tools/universe_update
+
+CLAUDE.md
+/docker/core-bob/bob.gen.json
+patch.diff

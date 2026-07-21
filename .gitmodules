@@ -1,0 +1,12 @@
+[submodule "core-lite"]
+	path = core-lite
+	url = https://github.com/qubic/core-lite.git
+	branch = main
+[submodule "core-bob"]
+	path = core-bob
+	url = https://github.com/qubic/core-bob.git
+	branch = master
+[submodule "qubic-demo-explorer"]
+	path = qubic-demo-explorer
+	url = https://github.com/J0ET0M/qubic-demo-explorer.git
+	branch = main

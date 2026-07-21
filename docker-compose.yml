@@ -1,0 +1,229 @@
+## All-in-one Qubic dev stack: core-lite (long-run local testnet) + bob indexer + explorer.
+##
+##   cp .env.example .env        # optional, tweak knobs
+##   docker compose up -d --build
+##
+## Access:
+##   Explorer UI    http://localhost        (nginx)
+##   Explorer API   http://localhost:5000   (swagger at /swagger in dev)
+##   Bob RPC        http://localhost:40420  (POST /qubic, ws://.../ws/qubic)
+##   Core-lite HTTP http://localhost:41841  (/, /live/v1, /query/v1, /explorer)
+##   ClickHouse     http://localhost:8123
+##
+## Bob resolves peers by raw IP only (inet_pton, no DNS), so core-lite gets a
+## static IP on the qubicnet subnet and docker/core-bob/bob.json points at it.
+
+services:
+  # --- Qubic core node: unattended long-run local testnet (676 computors) ---
+  core-lite:
+    build:
+      context: ./core-lite
+      dockerfile: ../docker/core-lite/Dockerfile
+      args:
+        EPOCH_TICK_CAPACITY: ${EPOCH_TICK_CAPACITY:-5184000}
+        PREFILL_QUS: ${PREFILL_QUS:-OFF}
+        LITE_RAM: ${LITE_RAM:-ON}
+    command: ["--tick-duration", "${TICK_DURATION_MS:-1000}", "--swap-compression"]
+    tty: true
+    stdin_open: true
+    ports:
+      # Host P2P port remappable: on hosts where 31841 is taken (e.g. sshd), set CORE_LITE_P2P_PORT
+      - "${CORE_LITE_P2P_PORT:-31841}:31841"
+      - "41841:41841"  # HTTP RPC / built-in explorer
+    volumes:
+      - core_lite_data:/qubic/data
+    networks:
+      qubicnet:
+        ipv4_address: ${CORE_LITE_IP:-10.77.0.10}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:41841/"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  # --- Bob indexer (all-in-one image: bob + redis + kvrocks via supervisord) ---
+  # Config comes solely from the mounted bob.json — no env vars, so the
+  # entrypoint never tries to rewrite the read-only mount. Sealed off from
+  # mainnet: discovery/tick/state/checkin endpoints are all cleared there.
+  core-bob:
+    build:
+      context: ./core-bob
+      dockerfile: docker/Dockerfile
+    depends_on:
+      core-lite:
+        condition: service_healthy
+    ports:
+      - "40420:40420"  # JSON-RPC + REST + WebSocket
+    volumes:
+      - ./docker/core-bob/bob.gen.json:/app/bob.json:ro
+      - bob_redis:/data/redis
+      - bob_kvrocks:/data/kvrocks
+      - bob_data:/data/bob
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  # --- Explorer stack (from qubic-demo-explorer) ---
+  clickhouse:
+    profiles: ["explorer"]
+    image: clickhouse/clickhouse-server:24.1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./qubic-demo-explorer/docker/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./qubic-demo-explorer/docker/clickhouse/disable-system-logs.xml:/etc/clickhouse-server/config.d/disable-system-logs.xml:ro
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      - CLICKHOUSE_DB=qubic
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  indexer:
+    profiles: ["explorer"]
+    build:
+      context: ./qubic-demo-explorer/src
+      dockerfile: QubicExplorer.Indexer/Dockerfile
+      args:
+        USE_LOCAL_PACKAGES: ${USE_LOCAL_PACKAGES:-false}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      core-bob:
+        condition: service_started
+    environment:
+      - Bob__Nodes__0=${BOB_URL:-http://core-bob:40420}
+      - ClickHouse__Host=clickhouse
+      - ClickHouse__Port=8123
+      - ClickHouse__Database=qubic
+      - ClickHouse__User=${CLICKHOUSE_USER:-default}
+      - ClickHouse__Password=${CLICKHOUSE_PASSWORD:-}
+      - Indexer__StartTick=${INDEXER_START_TICK:-0}
+      - Indexer__StartFromLatest=${INDEXER_START_FROM_LATEST:-false}
+      - Indexer__BatchSize=1000
+      - Indexer__FlushIntervalMs=1000
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  analytics:
+    profiles: ["explorer"]
+    build:
+      context: ./qubic-demo-explorer/src
+      dockerfile: QubicExplorer.Analytics/Dockerfile
+      args:
+        USE_LOCAL_PACKAGES: ${USE_LOCAL_PACKAGES:-false}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - Bob__Nodes__0=${BOB_URL:-http://core-bob:40420}
+      - ClickHouse__Host=clickhouse
+      - ClickHouse__Port=8123
+      - ClickHouse__Database=qubic
+      - ClickHouse__User=${CLICKHOUSE_USER:-default}
+      - ClickHouse__Password=${CLICKHOUSE_PASSWORD:-}
+      - AdminApiKey=${ADMIN_API_KEY:-}
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  api:
+    profiles: ["explorer"]
+    build:
+      context: ./qubic-demo-explorer/src
+      dockerfile: QubicExplorer.Api/Dockerfile
+      args:
+        USE_LOCAL_PACKAGES: ${USE_LOCAL_PACKAGES:-false}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
+      - Bob__Nodes__0=${BOB_URL:-http://core-bob:40420}
+      - ClickHouse__Host=clickhouse
+      - ClickHouse__Port=8123
+      - ClickHouse__Database=qubic
+      - ClickHouse__User=${CLICKHOUSE_USER:-default}
+      - ClickHouse__Password=${CLICKHOUSE_PASSWORD:-}
+      - AdminApiKey=${ADMIN_API_KEY:-}
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  pruner:
+    profiles: ["explorer"]
+    build:
+      context: ./qubic-demo-explorer/src
+      dockerfile: QubicExplorer.Pruner/Dockerfile
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - ClickHouse__Host=clickhouse
+      - ClickHouse__Port=8123
+      - ClickHouse__Database=qubic
+      - ClickHouse__User=${CLICKHOUSE_USER:-default}
+      - ClickHouse__Password=${CLICKHOUSE_PASSWORD:-}
+      - Pruner__DryRun=${PRUNER_DRY_RUN:-true}
+      - Pruner__IntervalMinutes=60
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  frontend:
+    profiles: ["explorer"]
+    build:
+      context: ./qubic-demo-explorer/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NUXT_API_URL=http://api:8080
+      - NUXT_PUBLIC_API_URL=
+    depends_on:
+      - api
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  nginx:
+    profiles: ["explorer"]
+    image: nginx:alpine
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./qubic-demo-explorer/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+networks:
+  qubicnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${QUBIC_SUBNET:-10.77.0.0/24}
+
+volumes:
+  core_lite_data:
+  bob_redis:
+  bob_kvrocks:
+  bob_data:
+  clickhouse_data:
