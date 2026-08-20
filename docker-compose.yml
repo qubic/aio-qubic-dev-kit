@@ -31,8 +31,8 @@ services:
     stdin_open: true
     ports:
       # Host P2P port remappable: on hosts where 31841 is taken (e.g. sshd), set CORE_LITE_P2P_PORT
-      - "${CORE_LITE_P2P_PORT:-31841}:31841"
-      - "41841:41841"  # HTTP RPC / built-in explorer
+      - "127.0.0.1:${CORE_LITE_P2P_PORT:-31841}:31841"
+      - "127.0.0.1:41841:41841"  # HTTP RPC / built-in explorer
     volumes:
       - core_lite_data:/qubic/data
     networks:
@@ -158,8 +158,8 @@ services:
       - ./qubic-demo-explorer/docker/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - ./qubic-demo-explorer/docker/clickhouse/disable-system-logs.xml:/etc/clickhouse-server/config.d/disable-system-logs.xml:ro
     ports:
-      - "8123:8123"
-      - "9000:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
     environment:
       - CLICKHOUSE_DB=qubic
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
@@ -233,7 +233,7 @@ services:
       clickhouse:
         condition: service_healthy
     ports:
-      - "5000:8080"
+      - "127.0.0.1:5000:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - Bob__Nodes__0=${BOB_URL:-http://core-bob:40420}
@@ -273,7 +273,7 @@ services:
       context: ./qubic-demo-explorer/frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NUXT_API_URL=http://api:8080
       - NUXT_PUBLIC_API_URL=
