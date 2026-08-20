@@ -12,10 +12,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ "${1:-}" = "--wipe" ]; then
-  docker compose --profile explorer down -v
+  docker compose --profile explorer --profile oracle down -v
   echo "Stack stopped, volumes wiped. Next ./scripts/up.sh starts a fresh chain from genesis."
 else
-  docker compose --profile explorer down
+  docker compose --profile explorer --profile oracle down
   echo "Stack stopped, volumes kept. Note: resuming a chain is not supported —"
   echo "run './scripts/down.sh --wipe' before the next up.sh for a clean start."
 fi

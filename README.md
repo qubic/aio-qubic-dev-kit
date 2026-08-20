@@ -58,6 +58,16 @@ docker compose --profile explorer stop && docker compose up -d
 
 The chain and bob's index are untouched by toggling — only the explorer services start/stop. (`~16 GB` of the total is core-lite itself; see [docs/configuration.md](docs/configuration.md) for what `LITE_RAM` shrinks and the full RAM breakdown.)
 
+## Optional: oracle machine
+
+The [oracle-machine](oracle-machine/) middleware (OM node + price/mock/doge oracle services) is **off by default**. Enable it explicitly:
+
+```bash
+./scripts/up.sh --oracle
+```
+
+This adds the `oracle` compose profile and rebuilds core-lite with the OM node's IP (`ORACLE_MACHINE_IP`, default `10.77.0.20`) compiled in — so toggling it restarts the chain. Optional exchange API keys for the price service go in `.env` (`BINANCE_API_KEY`, `MEXC_API_KEY`, `GATE_API_KEY`). Details in [docs/configuration.md](docs/configuration.md).
+
 ## Custom settings example
 
 All knobs live in `.env` ([docs/configuration.md](docs/configuration.md) has the full list). Example — slower ticks (halves disk usage) and a remapped P2P host port (e.g. when 31841 is taken by sshd):

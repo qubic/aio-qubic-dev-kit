@@ -10,3 +10,7 @@
 	path = qubic-demo-explorer
 	url = https://github.com/J0ET0M/qubic-demo-explorer.git
 	branch = main
+[submodule "oracle-machine"]
+	path = oracle-machine
+	url = https://github.com/qubic/oracle-machine.git
+	branch = main
