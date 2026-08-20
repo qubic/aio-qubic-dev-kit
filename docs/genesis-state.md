@@ -1,6 +1,6 @@
 # Genesis state: funding wallets and issuing assets
 
-Initial balances and assets come **only** from state files (`spectrum.<EPOCH>`, `universe.<EPOCH>`) loaded at genesis — the node mints nothing (`PREFILL_QUS=OFF`). `scripts/prepare-states.sh` (run by `up.sh`) seeds the files from `./states/` into the core-lite and bob volumes; if `./states/` is empty it unzips the bundled `state.zip` — an **empty genesis where every balance is zero** — and prints a warning.
+Initial balances and assets come **only** from state files (`spectrum.<EPOCH>`, `universe.<EPOCH>`) loaded at genesis — the node mints nothing (`PREFILL_QUS=OFF`). `scripts/prepare-states.sh` (run by `up.sh`) seeds the files from `./states/` into the core-lite and bob volumes; if `./states/` is empty it unzips the bundled `state.zip` — an example genesis where **all 676 default computors hold 10'000'000'000 QU each** and everything else is empty — and prints a note. The script reads `EPOCH` from `core-lite/src/public_settings.h` and renames the unzipped files to `spectrum.<EPOCH>`/`universe.<EPOCH>` if the zip was made for a different epoch.
 
 ## Crafting state files
 

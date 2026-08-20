@@ -36,14 +36,25 @@ if [ ! -f "states/spectrum.${EPOCH}" ] || [ ! -f "states/universe.${EPOCH}" ]; t
     exit 1
   fi
   echo "!==========================================================================!"
-  echo "! WARNING: ./states/ has no spectrum.${EPOCH}/universe.${EPOCH}."
-  echo "! Falling back to the bundled EXAMPLE state (state.zip): an EMPTY genesis"
-  echo "! — every balance is zero. Fund dev wallets with tools/spectrum_update"
-  echo "! and tools/universe_update on ./states/ files, then rerun after a"
-  echo "! full reset (docker compose down -v)."
+  echo "! NOTE: ./states/ has no spectrum.${EPOCH}/universe.${EPOCH}."
+  echo "! Falling back to the bundled EXAMPLE state (state.zip): all 676 default"
+  echo "! computors funded with 10'000'000'000 QU each; everything else is empty."
+  echo "! Fund extra dev wallets with tools/spectrum_update / tools/universe_update"
+  echo "! on ./states/ files, then rerun after a full reset (docker compose down -v)."
   echo "!==========================================================================!"
   mkdir -p states
   unzip -o -q state.zip -d states
+  # The zip's files may carry a different epoch suffix than the built EPOCH —
+  # rename them so core-lite/bob find them.
+  for kind in spectrum universe; do
+    if [ ! -f "states/${kind}.${EPOCH}" ]; then
+      src=$(ls "states/${kind}."* 2>/dev/null | head -1)
+      if [ -n "${src}" ]; then
+        echo "== renaming ${src} -> states/${kind}.${EPOCH} (EPOCH from core-lite/src/public_settings.h) =="
+        mv "${src}" "states/${kind}.${EPOCH}"
+      fi
+    fi
+  done
 fi
 
 echo "== seeding volumes from ./states =="
