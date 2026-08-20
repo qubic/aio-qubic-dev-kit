@@ -15,8 +15,10 @@ Copy `.env.example` → `.env` and adjust (done automatically by `scripts/up.sh`
 | `CORE_LITE_IP` | `10.77.0.10` | core-lite's static IP (must be inside `QUBIC_SUBNET`; bob's generated config points at it) |
 | `ADMIN_API_KEY` | empty | enables explorer `/api/admin/*` (sent as `X-Api-Key`) |
 | `PRUNER_DRY_RUN` | `true` | explorer pruner does not delete by default |
+| `ORACLE_MACHINE_IP` | empty | oracle machine on/off: OM node's static IP on `qubicnet` **and** a core-lite **build arg** (compiled into `oracleMachineIPs`). Empty = disabled. `up.sh --oracle` defaults it to `10.77.0.20` |
+| `BINANCE_API_KEY` / `MEXC_API_KEY` / `GATE_API_KEY` | empty | optional exchange API keys for the price oracle service (free tier with rate limiting when empty) |
 
-Build args (`EPOCH_TICK_CAPACITY`, `PREFILL_QUS`, `LITE_RAM`) need `docker compose build core-lite` to take effect.
+Build args (`EPOCH_TICK_CAPACITY`, `PREFILL_QUS`, `LITE_RAM`, `ORACLE_MACHINE_IP`) need `docker compose build core-lite` to take effect.
 
 ## RAM usage
 
@@ -55,3 +57,15 @@ docker compose --profile explorer down
 ```
 
 Without the explorer you still have bob's JSON-RPC/REST/WebSocket on :40420 and core-lite's built-in explorer at http://localhost:41841/explorer.
+
+### Oracle machine (optional, off by default)
+
+The [oracle-machine](../oracle-machine/) middleware (OM node + price/mock/doge oracle services) sits behind the `oracle` compose profile. Turn it on with:
+
+```bash
+./scripts/up.sh --oracle
+```
+
+which adds the `oracle` profile, defaults `ORACLE_MACHINE_IP=10.77.0.20`, and rebuilds core-lite with that IP compiled into its `oracleMachineIPs` table (core-lite dials the OM node on its own P2P port 31841; the OM node whitelists `CORE_LITE_IP`). Manual equivalent: set `ORACLE_MACHINE_IP` in `.env`, add `oracle` to `COMPOSE_PROFILES`, then `docker compose build && docker compose up -d`.
+
+Because the IP is a core-lite build arg, toggling the oracle machine rebuilds core-lite and restarts the chain — treat it like any chain restart (`./scripts/down.sh --wipe` first). Exchange API keys for the price service (`BINANCE_API_KEY`, `MEXC_API_KEY`, `GATE_API_KEY`) are optional `.env` knobs. Service logs land in the `oracle_logs` volume and on `docker compose logs -f oracle-machine oracle-price`.

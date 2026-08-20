@@ -23,6 +23,9 @@ services:
         EPOCH_TICK_CAPACITY: ${EPOCH_TICK_CAPACITY:-5184000}
         PREFILL_QUS: ${PREFILL_QUS:-OFF}
         LITE_RAM: ${LITE_RAM:-ON}
+        # Empty = no oracle machine compiled in. Set (e.g. 10.77.0.20) to make
+        # core-lite dial the oracle-machine service; changing it rebuilds core-lite.
+        ORACLE_MACHINE_IP: ${ORACLE_MACHINE_IP:-}
     command: ["--tick-duration", "${TICK_DURATION_MS:-1000}", "--swap-compression"]
     tty: true
     stdin_open: true
@@ -62,6 +65,86 @@ services:
       - bob_redis:/data/redis
       - bob_kvrocks:/data/kvrocks
       - bob_data:/data/bob
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  # --- Oracle machine (optional, profile "oracle": ./scripts/up.sh --oracle) ---
+  # core-lite dials the OM node at compile-time IP ORACLE_MACHINE_IP (build arg
+  # above), on its own P2P port 31841. The OM node whitelists core-lite's IP and
+  # forwards queries to the per-interface services below. One shared image; the
+  # node reaches services by compose DNS name, each service binds 0.0.0.0.
+  oracle-machine:
+    profiles: ["oracle"]
+    build:
+      context: ./oracle-machine
+      dockerfile: ../docker/oracle-machine/Dockerfile
+    image: aio-oracle-machine
+    command: ["oracle_machine_node", "--log", "/oracle/logs/oracle_machine_node.log"]
+    environment:
+      - OM_SERVER_PORT=31841
+      - QUBIC_NODES=${CORE_LITE_IP:-10.77.0.10}
+      - PRICE_SERVICE_HOST=oracle-price
+      - PRICE_SERVICE_PORT=31842
+      - MOCK_SERVICE_HOST=oracle-mock
+      - MOCK_SERVICE_PORT=31843
+      - DOGE_SERVICE_HOST=oracle-doge
+      - DOGE_SERVICE_PORT=31844
+    volumes:
+      - oracle_logs:/oracle/logs
+    networks:
+      qubicnet:
+        ipv4_address: ${ORACLE_MACHINE_IP:-10.77.0.20}
+    restart: unless-stopped
+
+  oracle-price:
+    profiles: ["oracle"]
+    build:
+      context: ./oracle-machine
+      dockerfile: ../docker/oracle-machine/Dockerfile
+    image: aio-oracle-machine
+    command: ["price_oracle_service", "--log", "/oracle/logs/price_service.log"]
+    environment:
+      - PRICE_SERVICE_HOST=0.0.0.0
+      - PRICE_SERVICE_PORT=31842
+      # Optional exchange API keys (higher rate limits; free tier if empty)
+      - BINANCE_API_KEY=${BINANCE_API_KEY:-}
+      - MEXC_API_KEY=${MEXC_API_KEY:-}
+      - GATE_API_KEY=${GATE_API_KEY:-}
+    volumes:
+      - oracle_logs:/oracle/logs
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  oracle-mock:
+    profiles: ["oracle"]
+    build:
+      context: ./oracle-machine
+      dockerfile: ../docker/oracle-machine/Dockerfile
+    image: aio-oracle-machine
+    command: ["mock_oracle_service", "--log", "/oracle/logs/mock_service.log"]
+    environment:
+      - MOCK_SERVICE_HOST=0.0.0.0
+      - MOCK_SERVICE_PORT=31843
+    volumes:
+      - oracle_logs:/oracle/logs
+    networks:
+      - qubicnet
+    restart: unless-stopped
+
+  oracle-doge:
+    profiles: ["oracle"]
+    build:
+      context: ./oracle-machine
+      dockerfile: ../docker/oracle-machine/Dockerfile
+    image: aio-oracle-machine
+    command: ["doge_oracle_service", "--log", "/oracle/logs/doge_service.log"]
+    environment:
+      - DOGE_SERVICE_HOST=0.0.0.0
+      - DOGE_SERVICE_PORT=31844
+    volumes:
+      - oracle_logs:/oracle/logs
     networks:
       - qubicnet
     restart: unless-stopped
@@ -227,3 +310,4 @@ volumes:
   bob_kvrocks:
   bob_data:
   clickhouse_data:
+  oracle_logs:

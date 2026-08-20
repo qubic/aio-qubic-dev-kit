@@ -35,9 +35,20 @@ ARG PREFILL_QUS=OFF
 # spectrum/assets depth 24->18, which breaks bob's wire structs and state files;
 # the sed below pins depth at 24 so bob compatibility is preserved.
 ARG LITE_RAM=ON
+# Empty (default): no oracle machine, zero address never dialed. Set to the
+# oracle-machine service IP (compose: ORACLE_MACHINE_IP) to compile it in —
+# oracleMachineIPs is a compile-time table in private_settings.h.
+ARG ORACLE_MACHINE_IP=""
 
 RUN sed -i 's/#define SPECTRUM_DEPTH 18 .*/#define SPECTRUM_DEPTH 24/; s/#define ASSETS_DEPTH 18 .*/#define ASSETS_DEPTH 24/' \
     src/network_messages/common_def.h
+
+RUN if [ -n "$ORACLE_MACHINE_IP" ]; then \
+        octets=$(echo "$ORACLE_MACHINE_IP" | tr '.' ','); \
+        sed -i "s|{0, 0, 0, 0}, // no oracle machine.*|{${octets}}, // oracle machine (ORACLE_MACHINE_IP build arg)|" \
+            src/private_settings.h; \
+        grep -q "{${octets}}, // oracle machine" src/private_settings.h; \
+    fi
 
 # Logging events stay enabled: bob requires them to index.
 RUN rm -rf build \
