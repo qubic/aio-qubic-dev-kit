@@ -15,6 +15,12 @@ docker compose logs -f core-bob | grep 'Current state'
 - Remote box? Tunnel from your laptop: `ssh -L 80:localhost:80 -L 5000:localhost:5000 -L 40420:localhost:40420 user@host`.
 - Pull the latest mainline of the three subprojects: `git submodule update --remote` (plain `git submodule update` returns to the pinned, tested commits).
 
+## Exposing the testnet to the internet
+
+Only two ports bind publicly (`0.0.0.0`): **80** (explorer UI — nginx proxies the API and websockets through it) and **40420** (bob JSON-RPC/REST/WS, including `qubic_broadcastTransaction`, so external users can send transactions). Everything else — ClickHouse 8123/9000, explorer API 5000, frontend 3000, core-lite 41841 and P2P 31841 — binds to `127.0.0.1` and is reachable from the host only (use an SSH tunnel: `ssh -L 41841:localhost:41841 user@host`).
+
+To publish on a VPS, open **only TCP 80 and 40420** in the provider firewall / security group. Keep in mind the RPC has no authentication or rate limiting — anyone can query and broadcast — which is acceptable for a disposable test chain but treat the whole deployment as untrusted-public: fresh chain, no secrets, wipe when done.
+
 ## Service endpoints
 
 | Service | URL |
